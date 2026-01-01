@@ -1,0 +1,9 @@
+IMG_SIZE = 256
+K = 5
+DATASET_PATH = "tomato_disease_ready"
+TRAIN_DIR = f"{DATASET_PATH}/train"
+TEST_DIR = f"{DATASET_PATH}/test"
+MODEL_PATH = "models/model.pkl"
+MODEL_DIR = "models"
+HSV_LOWER = [25, 40, 40]
+HSV_UPPER = [85, 255, 255]
