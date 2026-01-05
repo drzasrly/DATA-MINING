@@ -6,7 +6,7 @@ from utils_visual import make_canvas
 
 model = pickle.load(open(MODEL_PATH, "rb"))
 
-img = cv2.imread("test_images/late_blight.jpg")
+img = cv2.imread("test_images/sehat.jpg")
 img = cv2.resize(img, (256,256))
 orig = img.copy()
 
