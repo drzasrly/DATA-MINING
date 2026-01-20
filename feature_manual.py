@@ -34,3 +34,20 @@ def glcm_features(gray):
 def extract_features(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return color_features(image) + glcm_features(gray)
+
+import numpy as np
+
+def compute_glcm(image, distance=1, angle=0, levels=256):
+    glcm = np.zeros((levels, levels), dtype=np.float32)
+    rows, cols = image.shape
+
+    dx = int(np.round(distance * np.cos(angle)))
+    dy = int(np.round(distance * np.sin(angle)))
+
+    for i in range(rows - dy):
+        for j in range(cols - dx):
+            i_val = image[i, j]
+            j_val = image[i + dy, j + dx]
+            glcm[i_val, j_val] += 1
+
+    return glcm

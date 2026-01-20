@@ -31,13 +31,13 @@ X_val = (X_val - mean) / std
 
 # Evaluasi K
 K_values = [1,3,5,7,9]
-train_acc, val_acc = [], []
+train_acc, val_acc = [], []   
 
 def accuracy(Xref, yref, Xeval, yeval, K):
     correct = 0
     for i in range(len(Xeval)):
         pred = knn_predict(Xref, yref, Xeval[i], K)
-        if pred == yeval[i]:
+        if pred == yeval[i]:   
             correct += 1
     return correct / len(yeval) * 100
 
@@ -59,7 +59,7 @@ plt.plot(K_values, train_acc, marker='o', label='Training')
 plt.plot(K_values, val_acc, marker='o', label='Validation')
 plt.xlabel("Nilai K")
 plt.ylabel("Akurasi (%)")
-plt.title("Epoch-like Evaluation KNN")
+plt.title("Evaluation KNN")
 plt.legend()
 plt.grid()
 plt.show()
