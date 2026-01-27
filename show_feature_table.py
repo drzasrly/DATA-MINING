@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 import pandas as pd
+import random
 from feature_manual import extract_features
 
 DATASET_PATH = "tomato_disease_ready/train"   
@@ -17,6 +18,9 @@ for cls in sorted(os.listdir(DATASET_PATH)):
         continue
 
     images = os.listdir(class_path)[:SAMPLES_PER_CLASS]
+    
+    num_to_sample = min(len(images), SAMPLES_PER_CLASS)
+    images = random.sample(images, num_to_sample)
 
     for img_name in images:
         img_path = os.path.join(class_path, img_name)

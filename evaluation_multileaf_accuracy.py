@@ -3,7 +3,6 @@ import cv2
 import pickle
 import numpy as np
 import pandas as pd
-from collections import Counter
 from feature_manual import extract_features
 from config import MODEL_PATH, K
 
@@ -31,6 +30,11 @@ print("Jumlah kelas     :", len(classes))
 # =========================
 # LOAD GROUND TRUTH
 # =========================
+if not os.path.exists(GT_PATH):
+    print("\nERROR: File multileaf_groundtruth.csv tidak ditemukan!")
+    print("Silakan buat / generate ground truth terlebih dahulu.")
+    exit()
+
 gt_data = pd.read_csv(GT_PATH)
 
 # dictionary: (filename, leaf_id) -> true_label
@@ -46,7 +50,6 @@ print("Jumlah ground truth daun :", len(gt_dict))
 # =========================
 y_true = []
 y_pred = []
-conf_list = []
 total_leaf = 0
 total_labeled = 0
 
@@ -95,7 +98,7 @@ for file in sorted(os.listdir(IMAGE_PATH)):
     # =========================
     # LOOP SETIAP DAUN
     # =========================
-    leaf_id = 0   # reset per gambar
+    leaf_id = 0
 
     for m in np.unique(markers_ws):
 
@@ -114,7 +117,7 @@ for file in sorted(os.listdir(IMAGE_PATH)):
         leaf_roi = cv2.resize(orig[y:y+h, x:x+w], (256, 256))
 
         # =========================
-        # EKSTRAKSI & NORMALISASI
+        # FEATURE & NORMALISASI
         # =========================
         feat = np.array(extract_features(leaf_roi))
         feat = (feat - mean) / (std + 1e-8)
@@ -129,7 +132,6 @@ for file in sorted(os.listdir(IMAGE_PATH)):
         k_labels = [classes[train_labels[i]] for i in k_indices]
 
         pred_label = max(set(k_labels), key=k_labels.count)
-        confidence = (k_labels.count(pred_label) / K) * 100
 
         # =========================
         # AMBIL GROUND TRUTH
@@ -141,76 +143,36 @@ for file in sorted(os.listdir(IMAGE_PATH)):
 
             y_true.append(true_label)
             y_pred.append(pred_label)
-            conf_list.append(confidence)
             total_labeled += 1
 
-            print(f"{file:20s} | Daun-{leaf_id:03d} | True: {true_label:20s} | Pred: {pred_label:20s} | Conf: {confidence:6.2f}%")
+            print(f"{file:20s} | Daun-{leaf_id:03d} | True: {true_label:20s} | Pred: {pred_label:20s}")
 
         else:
             print(f"{file:20s} | Daun-{leaf_id:03d} | Pred: {pred_label:20s} | (TIDAK ADA GROUND TRUTH)")
 
 # =========================
-# FUNGSI METRIK MANUAL
+# HITUNG ACCURACY MANUAL
 # =========================
 def accuracy_manual(y_true, y_pred):
-    correct = sum(1 for i in range(len(y_true)) if y_true[i] == y_pred[i])
+    correct = 0
+    for i in range(len(y_true)):
+        if y_true[i] == y_pred[i]:
+            correct += 1
     return correct / len(y_true) if len(y_true) > 0 else 0
 
-def precision_recall_f1_manual(y_true, y_pred, classes):
-
-    precisions = []
-    recalls = []
-    f1s = []
-
-    for cls in classes:
-
-        tp = 0
-        fp = 0
-        fn = 0
-
-        for i in range(len(y_true)):
-            if y_true[i] == cls and y_pred[i] == cls:
-                tp += 1
-            elif y_true[i] != cls and y_pred[i] == cls:
-                fp += 1
-            elif y_true[i] == cls and y_pred[i] != cls:
-                fn += 1
-
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-        recall    = tp / (tp + fn) if (tp + fn) > 0 else 0
-        f1        = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0
-
-        precisions.append(precision)
-        recalls.append(recall)
-        f1s.append(f1)
-
-    # Macro average
-    return (
-        sum(precisions) / len(precisions),
-        sum(recalls) / len(recalls),
-        sum(f1s) / len(f1s)
-    )
-
-# =========================
-# HITUNG METRIK
-# =========================
-accuracy  = accuracy_manual(y_true, y_pred) * 100
-precision, recall, f1 = precision_recall_f1_manual(y_true, y_pred, classes)
+accuracy = accuracy_manual(y_true, y_pred) * 100
 
 # =========================
 # OUTPUT HASIL
 # =========================
-print("\n" + "="*75)
-print("HASIL EVALUASI MULTILEAF PER DAUN (WATERSHED BASED)")
-print("="*75)
+print("\n" + "="*70)
+print("HASIL EVALUASI MULTILEAF PER DAUN")
+print("="*70)
 
-print(f"Total Daun Terdeteksi : {total_leaf}")
-print(f"Total Daun Berlabel  : {total_labeled}")
+print(f"Total daun terdeteksi : {total_leaf}")
+print(f"Total daun berlabel  : {total_labeled}")
+print(f"Prediksi benar       : {sum(1 for i in range(len(y_true)) if y_true[i] == y_pred[i])}")
 print(f"Accuracy             : {accuracy:.2f}%")
-print(f"Precision (Macro)    : {precision:.4f}")
-print(f"Recall (Macro)       : {recall:.4f}")
-print(f"F1-Score (Macro)     : {f1:.4f}")
-print(f"Confidence Rata-rata : {np.mean(conf_list):.2f}%")
 
-print("="*75)
-print("Evaluasi multileaf selesai.")
+print("="*70)
+print("Evaluasi selesai.")

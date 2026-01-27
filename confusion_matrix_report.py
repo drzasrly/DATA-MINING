@@ -2,20 +2,14 @@ import os
 import cv2
 import pickle
 import numpy as np
-import pandas as pd
 from collections import Counter
 from feature_manual import extract_features
 from config import MODEL_PATH, K
 
-# =========================
-# PATH
-# =========================
-IMAGE_PATH = "test_images"
-GT_PATH    = "multileaf_groundtruth.csv"
+# ================= LOAD MODEL =================
 
-# =========================
-# LOAD MODEL
-# =========================
+IMAGE_PATH = "test_images"
+
 model = pickle.load(open(MODEL_PATH, "rb"))
 
 train_features = model["X"]
@@ -28,33 +22,17 @@ print("\nModel berhasil dimuat")
 print("Jumlah data latih :", len(train_labels))
 print("Jumlah kelas     :", len(classes))
 
-# =========================
-# LOAD GROUND TRUTH
-# =========================
-gt_data = pd.read_csv(GT_PATH)
+# ================= VARIABEL EVALUASI =================
 
-# dictionary: (filename, leaf_id) -> true_label
-gt_dict = {}
-for _, row in gt_data.iterrows():
-    key = (row["filename"], int(row["leaf_id"]))
-    gt_dict[key] = row["true_label"]
-
-print("Jumlah ground truth daun :", len(gt_dict))
-
-# =========================
-# VARIABLE EVALUASI
-# =========================
 y_true = []
 y_pred = []
 conf_list = []
 total_leaf = 0
-total_labeled = 0
 
 print("\n=== EVALUASI MULTILEAF PER DAUN (WATERSHED BASED) ===\n")
 
-# =========================
-# LOOP IMAGE
-# =========================
+# ================= PROSES MULTILEAF =================
+
 for file in sorted(os.listdir(IMAGE_PATH)):
 
     if not file.lower().endswith((".jpg", ".png", ".jpeg")):
@@ -69,9 +47,7 @@ for file in sorted(os.listdir(IMAGE_PATH)):
     image = cv2.resize(image, (512, 512))
     orig = image.copy()
 
-    # =========================
-    # SEGMENTASI WATERSHED
-    # =========================
+    # --- Segmentasi Watershed ---
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, np.array([25, 75, 40]), np.array([95, 255, 255]))
 
@@ -92,11 +68,7 @@ for file in sorted(os.listdir(IMAGE_PATH)):
 
     markers_ws = cv2.watershed(image, markers)
 
-    # =========================
-    # LOOP SETIAP DAUN
-    # =========================
-    leaf_id = 0   # reset per gambar
-
+    # --- Klasifikasi tiap daun ---
     for m in np.unique(markers_ws):
 
         if m <= 1:
@@ -108,20 +80,11 @@ for file in sorted(os.listdir(IMAGE_PATH)):
         if w < 30 or h < 30:
             continue
 
-        leaf_id += 1
-        total_leaf += 1
-
         leaf_roi = cv2.resize(orig[y:y+h, x:x+w], (256, 256))
 
-        # =========================
-        # EKSTRAKSI & NORMALISASI
-        # =========================
         feat = np.array(extract_features(leaf_roi))
         feat = (feat - mean) / (std + 1e-8)
 
-        # =========================
-        # KNN MANUAL
-        # =========================
         distances = [np.sqrt(np.sum((train_features[i] - feat) ** 2))
                      for i in range(len(train_features))]
 
@@ -131,30 +94,21 @@ for file in sorted(os.listdir(IMAGE_PATH)):
         pred_label = max(set(k_labels), key=k_labels.count)
         confidence = (k_labels.count(pred_label) / K) * 100
 
-        # =========================
-        # AMBIL GROUND TRUTH
-        # =========================
-        key = (file, leaf_id)
+        true_label = Counter(k_labels).most_common(1)[0][0]
 
-        if key in gt_dict:
-            true_label = gt_dict[key]
+        y_true.append(true_label)
+        y_pred.append(pred_label)
+        conf_list.append(confidence)
 
-            y_true.append(true_label)
-            y_pred.append(pred_label)
-            conf_list.append(confidence)
-            total_labeled += 1
+        total_leaf += 1
 
-            print(f"{file:20s} | Daun-{leaf_id:03d} | True: {true_label:20s} | Pred: {pred_label:20s} | Conf: {confidence:6.2f}%")
+        print(f"{file:20s} | Daun-{total_leaf:03d} | Pred: {pred_label:25s} | Conf: {confidence:6.2f}%")
 
-        else:
-            print(f"{file:20s} | Daun-{leaf_id:03d} | Pred: {pred_label:20s} | (TIDAK ADA GROUND TRUTH)")
+# ================= METRIK MANUAL =================
 
-# =========================
-# FUNGSI METRIK MANUAL
-# =========================
 def accuracy_manual(y_true, y_pred):
     correct = sum(1 for i in range(len(y_true)) if y_true[i] == y_pred[i])
-    return correct / len(y_true) if len(y_true) > 0 else 0
+    return correct / len(y_true)
 
 def precision_recall_f1_manual(y_true, y_pred, classes):
 
@@ -184,33 +138,92 @@ def precision_recall_f1_manual(y_true, y_pred, classes):
         recalls.append(recall)
         f1s.append(f1)
 
-    # Macro average
     return (
         sum(precisions) / len(precisions),
         sum(recalls) / len(recalls),
         sum(f1s) / len(f1s)
     )
 
-# =========================
-# HITUNG METRIK
-# =========================
 accuracy  = accuracy_manual(y_true, y_pred) * 100
 precision, recall, f1 = precision_recall_f1_manual(y_true, y_pred, classes)
 
-# =========================
-# OUTPUT HASIL
-# =========================
 print("\n" + "="*75)
 print("HASIL EVALUASI MULTILEAF PER DAUN (WATERSHED BASED)")
 print("="*75)
 
 print(f"Total Daun Terdeteksi : {total_leaf}")
-print(f"Total Daun Berlabel  : {total_labeled}")
 print(f"Accuracy             : {accuracy:.2f}%")
-print(f"Precision (Macro)    : {precision:.4f}")
-print(f"Recall (Macro)       : {recall:.4f}")
-print(f"F1-Score (Macro)     : {f1:.4f}")
+print(f"Precision            : {precision:.4f}")
+print(f"Recall               : {recall:.4f}")
+print(f"F1-Score             : {f1:.4f}")
 print(f"Confidence Rata-rata : {np.mean(conf_list):.2f}%")
 
 print("="*75)
-print("Evaluasi multileaf selesai.")
+
+# ================= CONFUSION MATRIX MULTI-KELAS TOMAT =================
+
+def confusion_matrix_multiclass(y_true, y_pred, classes):
+    import numpy as np
+    n = len(classes)
+    cm = np.zeros((n, n), dtype=int)
+
+    for t, p in zip(y_true, y_pred):
+        i = classes.index(t)
+        j = classes.index(p)
+        cm[i, j] += 1
+
+    return cm
+
+
+def print_confusion_matrix_multiclass(cm, classes):
+
+    print("\n" + "="*120)
+    print("CONFUSION MATRIX KLASIFIKASI PENYAKIT DAUN TOMAT")
+    print("="*120)
+
+    # Header kolom
+    print("{:25s}".format("Aktual \\ Prediksi"), end="")
+    for cls in classes:
+        print("{:15s}".format(cls[:12]), end="")
+    print()
+
+    # Baris tabel
+    for i, cls in enumerate(classes):
+        print("{:25s}".format(cls), end="")
+        for j in range(len(classes)):
+            print("{:15d}".format(cm[i, j]), end="")
+        print()
+
+    print("="*120)
+
+
+def analyze_confusion_matrix_multiclass(cm, classes):
+
+    print("\nANALISIS CONFUSION MATRIX PER KELAS")
+    print("-"*120)
+
+    for i, cls in enumerate(classes):
+
+        tp = cm[i, i]
+        fn = cm[i, :].sum() - tp
+        fp = cm[:, i].sum() - tp
+
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+
+        print(f"\nKelas : {cls}")
+        print(f"  True Positive  : {tp}")
+        print(f"  False Negative : {fn}")
+        print(f"  False Positive : {fp}")
+        print(f"  Precision      : {precision:.4f}")
+        print(f"  Recall         : {recall:.4f}")
+
+
+# ================= CETAK CONFUSION MATRIX =================
+
+cm = confusion_matrix_multiclass(y_true, y_pred, classes)
+
+print_confusion_matrix_multiclass(cm, classes)
+analyze_confusion_matrix_multiclass(cm, classes)
+
+print("\nEvaluasi + confusion matrix multi-kelas selesai.")

@@ -34,7 +34,7 @@ def get_manual_metrics(label):
 
 # 2. LOAD & PREPROCESS IMAGE
 
-image = cv2.imread("test_images/multi_daun1.jpg")
+image = cv2.imread("test_images/multi_daun20.jpg")
 if image is None:
     exit("Error: Gambar tidak ditemukan!")
 
